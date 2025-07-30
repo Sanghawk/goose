@@ -1,0 +1,28 @@
+{
+  "name": "goose",
+  "private": true,
+  "version": "1.0.0",
+  "description": "",
+  "workspaces": [
+    "libs/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "tsc --build"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Sanghawk/goose.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Sanghawk/goose/issues"
+  },
+  "homepage": "https://github.com/Sanghawk/goose#readme",
+  "devDependencies": {
+    "@types/node": "^24.1.0",
+    "tsx": "^4.20.3",
+    "typescript": "^5.8.3"
+  }
+}

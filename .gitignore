@@ -1,1 +1,8 @@
 node_modules/
+
+# Ignore all build outputs
+dist/
+**/dist/
+# TypeScript incremental build info
+*.tsbuildinfo
+**/*.tsbuildinfo
