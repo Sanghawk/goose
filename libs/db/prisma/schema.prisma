@@ -14,7 +14,220 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// Enums
+// Mapping names to Prisma conventions; underlying DB enums remain uppercase
+
+enum PlayerStatus {
+  active
+  banned
+  suspended
+}
+
+enum ChipLedgerType {
+  buyin
+  win
+  rake
+  refund
+  deposit
+  withdraw
+}
+
+enum TableType {
+  cash
+  tournament
+}
+
+enum TableStatus {
+  waiting
+  running
+  ended
+}
+
+enum HandStage {
+  preflop
+  flop
+  turn
+  river
+  showdown
+  complete
+}
+
+enum HandPlayerStatus {
+  in
+  folded
+  all_in
+  out
+}
+
+enum CommunityCardStage {
+  flop
+  turn
+  river
+}
+
+enum ActionType {
+  check
+  call
+  fold
+  bet
+  raise
+  all_in
+  post_small_blind
+  post_big_blind
+}
+
+// Models
+
 model Player {
-  player_id Int @id @default(autoincrement())
-  player_name String @db.VarChar(255)
+  playerId     Int          @id @default(autoincrement())
+  playerName   String       @db.VarChar(255)
+  email        String       @unique
+  passwordHash String       @db.VarChar(255)
+  createdAt    DateTime     @default(now())
+  lastLoginAt  DateTime     @updatedAt
+  status       PlayerStatus @default(active)
+
+  chipLedgers  ChipLedger[]
+  tablePlayers TablePlayer[]
+  handPlayers  HandPlayer[]
+  winningHands Hand[]        @relation("WinningPlayerHands")
+  potAwards    PotAward[]
+}
+
+model ChipLedger {
+  ledgerId       Int            @id @default(autoincrement())
+  playerId       Int
+  relatedTableId Int?
+  relatedHandId  Int?
+  type           ChipLedgerType
+  amount         Int
+  createdAt      DateTime       @default(now())
+
+  player       Player @relation(fields: [playerId], references: [playerId], onDelete: Cascade, onUpdate: Cascade)
+  relatedTable Table? @relation("TableLedgerRelation", fields: [relatedTableId], references: [tableId], onDelete: SetNull, onUpdate: Cascade)
+  relatedHand  Hand?  @relation("LedgerHandRelation", fields: [relatedHandId], references: [handId], onDelete: SetNull, onUpdate: Cascade)
+}
+
+model Table {
+  tableId            Int         @id @default(autoincrement())
+  name               String?     @db.VarChar(255)
+  type               TableType
+  status             TableStatus
+  buyinMin           Int
+  buyinMax           Int
+  seatsCount         Int
+  smallBlind         Int
+  bigBlind           Int
+  ante               Int         @default(0)
+  maxRaiseMultiplier Int
+  createdAt          DateTime    @default(now())
+
+  tablePlayers TablePlayer[]
+  hands        Hand[]
+  chipLedgers  ChipLedger[]  @relation("TableLedgerRelation")
+}
+
+model TablePlayer {
+  tablePlayerId Int      @id @default(autoincrement())
+  tableId       Int
+  playerId      Int
+  seatNumber    Int
+  joinAt        DateTime @default(now())
+  buyinAmount   Int
+  currentStack  Int
+  isActive      Boolean
+  hasFolded     Boolean
+  isAllIn       Boolean
+
+  table  Table  @relation(fields: [tableId], references: [tableId], onDelete: Cascade, onUpdate: Cascade)
+  player Player @relation(fields: [playerId], references: [playerId], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([tableId, seatNumber])
+}
+
+model Hand {
+  handId          Int       @id @default(autoincrement())
+  tableId         Int
+  dealerSeat      Int
+  smallBlindSeat  Int
+  bigBlindSeat    Int
+  stage           HandStage
+  deckOrder       Json
+  potAmount       Int
+  rakeAmount      Int
+  winningPlayerId Int?
+  winningHandDesc String?   @db.VarChar(255)
+  startedAt       DateTime
+  endedAt         DateTime?
+
+  table          Table           @relation(fields: [tableId], references: [tableId], onDelete: Cascade, onUpdate: Cascade)
+  handPlayers    HandPlayer[]
+  communityCards CommunityCard[]
+  actionLogs     ActionLog[]
+  pots           Pot[]
+  chipLedgers    ChipLedger[]    @relation("LedgerHandRelation")
+  winningPlayer  Player?         @relation("WinningPlayerHands", fields: [winningPlayerId], references: [playerId], onDelete: SetNull, onUpdate: Cascade)
+}
+
+model HandPlayer {
+  handPlayerId  Int              @id @default(autoincrement())
+  handId        Int
+  playerId      Int
+  seatNumber    Int
+  holeCards     String[] // native PostgreSQL array; @db.VarChar not supported on lists
+  startingStack Int
+  endingStack   Int
+  status        HandPlayerStatus
+
+  hand       Hand        @relation(fields: [handId], references: [handId], onDelete: Cascade, onUpdate: Cascade)
+  player     Player      @relation(fields: [playerId], references: [playerId], onDelete: Cascade, onUpdate: Cascade)
+  actionLogs ActionLog[] @relation("PlayerActions")
+
+  @@unique([handId, seatNumber])
+}
+
+model CommunityCard {
+  communityCardId Int                @id @default(autoincrement())
+  handId          Int
+  stage           CommunityCardStage
+  cardPosition    Int
+  cardCode        String             @db.VarChar(2)
+
+  hand Hand @relation(fields: [handId], references: [handId], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([handId, cardPosition])
+}
+
+model ActionLog {
+  actionLogId       Int        @id @default(autoincrement())
+  handId            Int
+  handPlayerId      Int
+  actionTs          DateTime
+  actionType        ActionType
+  amount            Int
+  totalBetThisRound Int
+  resultingStack    Int
+
+  hand       Hand       @relation(fields: [handId], references: [handId], onDelete: Cascade, onUpdate: Cascade)
+  handPlayer HandPlayer @relation("PlayerActions", fields: [handPlayerId], references: [handPlayerId], onDelete: Cascade, onUpdate: Cascade)
+}
+
+model Pot {
+  potId  Int     @id @default(autoincrement())
+  handId Int
+  amount Int
+  isMain Boolean
+
+  hand   Hand       @relation(fields: [handId], references: [handId], onDelete: Cascade, onUpdate: Cascade)
+  awards PotAward[]
+}
+
+model PotAward {
+  potAwardId  Int @id @default(autoincrement())
+  potId       Int
+  playerId    Int
+  awardAmount Int
+
+  pot    Pot    @relation(fields: [potId], references: [potId], onDelete: Cascade, onUpdate: Cascade)
+  player Player @relation(fields: [playerId], references: [playerId], onDelete: Cascade, onUpdate: Cascade)
 }
